@@ -1,0 +1,38 @@
+# Core Dependencies
+# Pin NumPy to 1.x to avoid compatibility issues with PyTorch and other packages
+# NumPy 2.x breaks compatibility with many scientific computing packages
+numpy>=1.23.0,<2.0.0
+pyyaml>=5.4.0
+
+# JAX and Flax (for model training)
+# JAX works with both NumPy 1.x and has better compatibility
+jax[cuda12]>=0.4.0
+flax>=0.7.0
+optax>=0.1.0
+distrax>=0.1.3  # For probability distributions in PPO
+
+# PyTorch (for VMAS environment)
+# Use specific PyTorch version that's compatible with NumPy 1.x
+torch>=2.0.0,<2.2.0
+torchvision>=0.15.0,<0.17.0
+
+# Gymnasium (replacement for deprecated Gym - required by newer VMAS)
+gymnasium>=0.28.0
+
+# VMAS (Vectorized Multi-Agent Simulator)
+# Install from local directory or pip
+vmas>=1.3.0
+
+# Weights & Biases for experiment tracking
+wandb>=0.15.0
+
+# Visualization
+moviepy>=1.0.3  # For GIF generation from rendered frames
+pyvirtualdisplay>=2.2  # For headless rendering (servers without display)
+
+# Optional: Additional utilities
+# psutil  # For CPU core detection (optional, for performance tuning)
+
+# Optional: Logging and visualization
+# matplotlib>=3.5.0
+# tensorboard>=2.10.0

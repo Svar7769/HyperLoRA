@@ -1,0 +1,149 @@
+# DICO Training Configuration for Pressure Plate
+# Uses DICO architecture from Bettini et al. (2024):
+# - homogeneous shared network (phi_homo)
+# - per-agent heterogeneous networks (phi_hetero_i)
+
+experiment:
+  name: "dico_pressure_plate"
+  tags: ["dico", "pressure_plate", "diversity_control", "cooperative"]
+
+# Device Settings
+device:
+  use_cuda: false
+  cuda_device: 0
+
+# Environment Settings
+env:
+  scenario_name: "pressure_plate"
+  num_agents: 3
+  max_agents: 3
+  num_envs: 128
+  continuous_actions: true
+
+  # Reward settings
+  penalise_by_time: false
+  share_reward: true
+  distance_shaping_coef: 0.0
+
+  # Pressure plate specific parameters
+  n_ground_robots: 3
+  x_semidim: 2.0
+  y_semidim: 2.0
+  plate_radius: 0.3
+  plate_margin: 1.0
+  random_plate_positions: false  # Whether to randomize plate positions during training (vs fixed corners)
+  door_size: 0.9
+  goal_radius: 0.3
+  with_drone: false
+  use_global_obs: true
+
+  # Reward type and magnitudes
+  reward_type: "sparse"
+  plate_left_reward: 0.2
+  plate_right_reward: 1.0
+  goal_reward: 100.0
+  time_penalty: 0.0
+
+  # Spawn region during training
+  training_spawn_side: "left"
+
+  # Mixed agent training
+  mixed_agent_training: false
+  min_agents: 3
+
+  # Fixed capability settings
+  use_fixed_capabilities: true
+  fixed_food_positions: false
+  fixed_capabilities:
+    speed: [0.8, 1.0, 1.2]
+
+# Training Settings
+training:
+  num_episodes: 210
+  rollout_steps: 200
+  learning_rate: 6.0e-4
+  log_interval: 10
+  seed: 34210
+
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2
+  ppo_epochs: 4
+  value_loss_coef: 0.25
+  entropy_coef: 0.01
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  critic_grad_norm: 0.1
+  reward_scale: 1.0
+  advantage_clip_range: 10.0
+
+  # Value clipping
+  clip_value_loss: true
+  value_clip_range: 10.0
+
+  # Global state clipping
+  clip_global_state: true
+  clip_global_state_min: -100.0
+  clip_global_state_max: 100.0
+
+  # DICO diversity-control hyperparameters (core)
+  use_diversity_control: true
+  target_snd: 0.3
+  snd_moving_average_coef: 0.1
+  max_diversity_scaling: 100.0
+  num_snd_samples: 32
+
+  # Mini-batch settings
+  use_minibatches: true
+  num_minibatches: 8
+  shuffle_minibatches: true
+
+  # DICO-specific SND settings
+  use_snd_obs_buffer: false
+  use_adapter_snd: false
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 20
+  num_eval_episodes: 10
+  max_eval_steps: 200
+
+# Model Architecture
+model:
+  # DICO architecture (Bettini et al. style)
+  use_dico: true
+  use_hypernetwork: false
+
+  # Keep capability context disabled to match pressure_plate path in current train.py
+  use_capability_context: false
+  use_lidar_context: false
+  use_observation_context: false
+
+  # Policy dimensions (global obs in pressure_plate)
+  obs_dim: 23
+  policy_hidden_dims: [128, 128]
+  action_dim: 2
+
+  # Critic settings
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+
+  # Additional settings
+  log_std_max: 0.0
+  min_std: 0.3
+
+# Optimizer Settings
+optimizer:
+  learning_rate: 6.0e-4
+  critic_learning_rate: 3.0e-4
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+
+# Logging Settings
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  save_interval: 100
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null

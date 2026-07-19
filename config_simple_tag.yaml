@@ -1,0 +1,149 @@
+# HyperLoRA Training Configuration for Simple Tag
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "simple_tag"  # VMAS scenario name
+  num_agents: 1  # Number of good agents (being chased)
+  num_adversaries: 2  # Number of adversary agents (chasers) - reduced to 1
+  num_landmarks: 2  # Number of landmarks/obstacles
+  max_agents: 4  # Maximum number of total agents (good + adversaries) - increased to 4
+  num_envs: 128
+  continuous_actions: true
+  
+  # Simple tag specific parameters
+  shape_agent_rew: false  # Shape reward by distance from adversaries (disabled - good agent just stays center)
+  shape_adversary_rew: true  # Enable distance-based shaping for adversaries to encourage chasing
+  agents_share_rew: false  # Whether good agents share rewards
+  adversaries_share_rew: true  # Whether adversaries share rewards
+  observe_same_team: true  # Whether agents observe same team members
+  observe_pos: true  # Whether to observe absolute position
+  observe_vel: true  # Whether to observe velocity
+  bound: 1.0  # Environment boundary
+  respawn_at_catch: true  # Whether to respawn agents when caught
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: false # Set to true to vary number of agents during training
+  min_agents: 2  # Minimum number of agents per episode (used if mixed_agent_training=true)
+  
+  # Fixed capability settings (for heterogeneous agent experiments)
+  use_fixed_capabilities: true  # Set to true to use fixed capabilities
+  
+  # Fixed capability definitions (used only if use_fixed_capabilities=true)
+  # adversary_speeds: speeds for adversary agents
+  # agent_speeds: speeds for good agents
+  # adversary_lidar_ranges: lidar ranges for adversary agents
+  # agent_lidar_ranges: lidar ranges for good agents
+  fixed_capabilities:
+    adversary_speeds: [0.5, 0.8]  # Fixed speed for 1 adversary
+    agent_speeds: [1.3]  # Fixed speed value for 1 good agent
+    adversary_lidar_ranges: [0.5, 0.5, 0.5]  # Fixed lidar range for adversary
+    agent_lidar_ranges: [0.6]  # Fixed lidar range for good agent
+
+# Training Settings
+training:
+  num_episodes: 2000
+  rollout_steps: 100  # Increased for more data per update
+  learning_rate: 1.0e-4
+  log_interval: 10
+  seed: 42
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # PPO clipping parameter
+  ppo_epochs: 10  # Reduced to prevent over-fitting to single batch
+  value_loss_coef: 0.5  # Reduce from 5.0 for stability
+  entropy_coef: 0.01  # Completely disabled - no entropy bonus
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda parameter
+  max_grad_norm: 0.5  # Maximum gradient norm for clipping (policy)
+  critic_grad_norm: 0.1  # Tighten significantly for stability
+  hypernetwork_grad_norm: 0.5  # Gradient norm for hypernetwork
+  reward_scale: 0.2  # Reduced for large network sensitivity
+  advantage_clip_range: 10.0  # Clip normalized advantages to prevent extreme outliers
+  target_entropy: 0.0  # Not used when entropy_coef is 0
+  
+  # Value function clipping (to prevent exploding value predictions)
+  clip_value_loss: true  # Enable value loss clipping
+  value_clip_range: 10.0  # Reduce from 50.0 for tighter control
+
+  # Global state clipping (for value loss stabilization)
+  clip_global_state: true  # Set true to enable clipping of global state before critic
+  clip_global_state_min: -5.0  # Minimum value for clipping (tightened)
+  clip_global_state_max: 5.0   # Maximum value for clipping (tightened)
+
+  # System Neural Diversity (SND) settings
+  num_snd_samples: 10  # Number of context samples for Expected SND
+  
+  # Diversity Control (DiCo paper approach)
+  use_diversity_control: true # Enable SND-based adapter scaling
+  target_snd: 1.0  # Target System Neural Diversity level
+  snd_moving_average_coef: 0.5 # Coefficient for exponential moving average
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100  # Run evaluation every N episodes
+  num_eval_episodes: 10  # Number of episodes to run during evaluation
+  max_eval_steps: 100  # Maximum steps per evaluation episode
+
+# Model Architecture
+model:
+  # Policy dimensions
+  use_hypernetwork: true  # Set to false to disable hypernetwork/LoRA and use standard MAPPO
+  adaptive_hypernetwork: false  # Set to true to enable adaptive requerying (not used without lidar)
+  use_lidar_context: false  # No lidar in simple_tag
+  use_capability_context: false  # Set to true to feed agent capabilities to hypernetwork
+  obs_dim: 20  # Observation dimension (will be auto-detected based on scenario)
+  policy_hidden_dims: [256, 256]  # List of hidden layer dimensions for policy network
+  action_dim: 2  # Action dimension (continuous 2D actions)
+  log_std_min: -2.0  # Minimum log std
+  log_std_max: -1.0  # Maximum log std (caps std at ~0.37)
+  min_std: 0.01  # Near-zero minimum for deterministic convergence
+  
+  # LoRA settings
+  lora_rank: 16  # Increased rank for more adapter capacity
+  lora_mode: 'final_only'  # Apply LoRA to final layer 
+  lora_scaling_factor: 1.0  # Much stronger scaling to overcome base policy bias
+  
+  # Context settings
+  task_embed_dim: 16  # Dimension of task embedding
+  
+  # Hypernetwork Transformer settings
+  transformer_dim: 64  # Internal dimension of Transformer
+  transformer_heads: 4  # Number of attention heads
+  transformer_layers: 2  # Number of Transformer encoder layers
+  transformer_mlp_dim: 256  # MLP dimension in Transformer (4x transformer_dim)
+  transformer_dropout: 0.0  # Dropout rate
+  
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128  # Reduce from 256 for stability
+  critic_num_layers: 2  # Number of layers in critic MLP
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 6.0e-5
+  hn_learning_rate: 3.0e-05  # Increased significantly for stronger adapter updates
+  critic_learning_rate: 5.0e-6  # Even lower temporarily for stability
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-7
+
+# Logging Settings
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  log_interval: 10
+  save_interval: 100
+  use_wandb: false
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_simple_tag"
+  description: "HyperLoRA training on Simple Tag environment"
+  tags: ["hyperlora", "simple_tag", "adversarial", "multi-agent"]

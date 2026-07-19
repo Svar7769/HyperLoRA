@@ -1,0 +1,151 @@
+# HyperLoRA Training Configuration for Sampling
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "sampling"  # VMAS scenario name
+  num_agents: 3  # Number of agents
+  max_agents: 3  # Maximum number of agents
+  num_envs: 128
+  continuous_actions: true
+  
+  # Sampling specific parameters
+  shared_rew: true  # Whether agents share rewards
+  comms_range: 0.0  # Communication range between agents
+  lidar_range: 0.2  # Lidar range for detecting other agents
+  agent_radius: 0.025  # Radius of each agent
+  xdim: 1.0  # X dimension of environment
+  ydim: 1.0  # Y dimension of environment
+  grid_spacing: 0.05  # Grid spacing for sampling
+  n_gaussians: 3  # Number of Gaussian distributions to sample from
+  cov: 0.05  # Covariance of Gaussian distributions (can be list)
+  collisions: true  # Whether agents can collide
+  spawn_same_pos: false  # Whether to spawn agents at same position
+  norm: true  # Normalize sampling values
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: false  # Set to true to vary number of agents during training
+  min_agents: 2  # Minimum number of agents per episode (used if mixed_agent_training=true)
+  
+  # Fixed capability settings (for heterogeneous agent experiments)
+  use_fixed_capabilities: false  # Set to true to use fixed capabilities
+  
+  # Fixed capability definitions (used only if use_fixed_capabilities=true)
+  fixed_capabilities:
+    speeds: [1.0, 1.0, 1.0]  # Fixed speed for each agent
+
+# Training Settings
+training:
+  num_episodes: 2000
+  rollout_steps: 100  # Steps per episode
+  learning_rate: 1.0e-4
+  log_interval: 10
+  seed: 342
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # PPO clipping parameter
+  ppo_epochs: 10  # Number of PPO update epochs
+  value_loss_coef: 0.5  # Value loss coefficient
+  entropy_coef: 0.01  # Entropy coefficient for exploration
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda parameter
+  max_grad_norm: 0.5  # Maximum gradient norm for clipping (policy)
+  critic_grad_norm: 0.1  # Gradient norm for critic
+  hypernetwork_grad_norm: 0.5  # Gradient norm for hypernetwork
+  reward_scale: 0.2  # Reward scaling factor
+  advantage_clip_range: 10.0  # Clip normalized advantages
+  target_entropy: 0.0  # Target entropy (not used when entropy_coef is 0)
+  
+  # Value function clipping
+  clip_value_loss: true  # Enable value loss clipping
+  value_clip_range: 10.0  # Value clipping range
+
+  # Global state clipping
+  clip_global_state: true  # Enable clipping of global state before critic
+  clip_global_state_min: -5.0  # Minimum value for clipping
+  clip_global_state_max: 5.0   # Maximum value for clipping
+
+  # System Neural Diversity (SND) settings
+  num_snd_samples: 10  # Number of context samples for Expected SND
+  
+  # Diversity Control
+  use_diversity_control: true  # Enable SND-based adapter scaling
+  target_snd: 1.5  # Target System Neural Diversity level
+  snd_moving_average_coef: 0.8  # Coefficient for exponential moving average
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100  # Run evaluation every N episodes
+  num_eval_episodes: 10  # Number of episodes to run during evaluation
+  max_eval_steps: 100  # Maximum steps per evaluation episode
+
+# Model Architecture
+model:
+  # Policy dimensions
+  use_hypernetwork: true  # Set to false to disable hypernetwork/LoRA
+  adaptive_hypernetwork: false  # Adaptive requerying (not typically needed)
+  use_lidar_context: true  # Use neighbor samples as context for hypernetwork
+  use_capability_context: false  # Feed agent capabilities to hypernetwork
+  obs_dim: 12  # Observation dimension: pos(2) + vel(2) + neighbor_samples(8)
+  policy_hidden_dims: [64, 64]  # Hidden layer dimensions for policy network
+  
+  # LoRA-specific settings
+  lora_rank: 8  # Rank for LoRA adaptation
+  lora_alpha: 1.0  # LoRA alpha parameter (scaling factor)
+  task_embed_dim: 16  # Dimension of task embedding
+  
+  # Hypernetwork Transformer settings
+  transformer_dim: 64  # Internal dimension of Transformer
+  transformer_heads: 4  # Number of attention heads
+  transformer_layers: 2  # Number of Transformer encoder layers
+  transformer_mlp_dim: 256  # MLP dimension in Transformer (4x transformer_dim)
+  transformer_dropout: 0.0  # Dropout rate
+  
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 64  # Hidden dimension for centralized critic
+  critic_num_layers: 2  # Number of layers in critic MLP
+  
+  # Self-attention settings
+  use_self_attention: true  # Enable self-attention in policy
+  num_attention_heads: 4  # Number of attention heads
+  attention_hidden_dim: 128  # Hidden dimension for attention
+  
+  # Action space
+  action_dim: 2  # Will be auto-detected from environment
+
+# Optimizer Settings
+optimizer:
+  type: "adam"  # Optimizer type
+  learning_rate: 1.0e-4
+  hn_learning_rate: 1.0e-4  # Hypernetwork learning rate
+  critic_learning_rate: 1.0e-4  # Critic learning rate
+  beta1: 0.9  # Adam beta1
+  beta2: 0.999  # Adam beta2
+  eps: 1.0e-8  # Adam epsilon
+
+# Logging and Checkpointing
+logging:
+  use_wandb: true  # Enable Weights & Biases logging
+  wandb_project: "hyperlora-vmas"  # W&B project name
+  wandb_entity: null  # W&B entity (username or team name)
+  wandb_tags: ["sampling", "vmas", "hyperlora"]  # Tags for W&B runs
+  log_dir: "logs"  # Directory for text logs
+  checkpoint_dir: "checkpoints"  # Directory for model checkpoints
+  save_interval: 100  # Save checkpoint every N episodes
+  keep_n_checkpoints: 5  # Number of checkpoints to keep (oldest deleted)
+
+# Rendering
+rendering:
+  render_interval: 0  # Generate GIF every N episodes (0 to disable)
+  render_length: 100  # Number of steps to render in GIF
+  gif_save_dir: "renders"  # Directory to save rendered GIFs
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_sampling"
+  description: "HyperLoRA training on Sampling environment"
+  tags: ["hyperlora", "sampling", "cooperative", "multi-agent"]

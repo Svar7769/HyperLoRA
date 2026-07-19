@@ -1,0 +1,135 @@
+# Configuration for Generalization Experiment
+# Train with mixed team sizes (2-4 agents) and evaluate on 5-6 agents
+# Based on config.yaml with mixed_agent_training enabled
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "dispersion"  # VMAS scenario name
+  num_agents: 4  # Max agents during training (will vary from min_agents to this)
+  max_agents: 4  # Set to training max for critic (NOT evaluation max)
+  num_envs: 64
+  continuous_actions: true
+  penalise_by_time: false  # Whether to penalise agents by time (encourages faster solutions and active exploration)
+  share_reward: false # Whether agents share rewards
+  distance_shaping_coef: 0.0  # Coefficient for distance-based reward shaping (0 to disable)
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: true # ENABLED for generalization experiment
+  min_agents: 2  # Minimum number of agents per episode (train on 2-4 agents)
+  # max_agents is used as the upper bound for mixed training
+  # All agents in an episode have SAME capabilities (homogeneous teams)
+  
+  # Fixed capability and food position settings (for controlled experiments)
+  use_fixed_capabilities: false  # Randomize capabilities for diversity
+  fixed_food_positions: false  # Set to true to fix food positions in corners
+  
+  # Fixed capability definitions (used only if use_fixed_capabilities=true)
+  # If num_agents doesn't match the length of these lists, will auto-generate fixed capabilities
+  fixed_capabilities:
+    speeds: [0.5, 1.5, 0.5, 1.5]  # Fixed speed values for 4 agents
+    lidar_ranges: [0.3, 0.3, 0.3, 0.3]  # Fixed lidar range values for 4 agents
+
+# Training Settings
+training:
+  num_episodes: 100  # Will be overridden by command line
+  rollout_steps: 100
+  learning_rate: 6.0e-5
+  log_interval: 10
+  seed: 42
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # PPO clipping parameter
+  ppo_epochs: 5  # Number of PPO update epochs per rollout (reduced to prevent overfitting)
+  value_loss_coef: 1.0  # Coefficient for value loss
+  entropy_coef: 0.01  # Entropy coefficient for exploration (increased from 0.01 to prevent collapse)
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda parameter
+  max_grad_norm: 0.5  # Maximum gradient norm for clipping (conservative to prevent NaN)
+  hypernetwork_grad_norm: 0.1  # Gradient norm for hypernetwork (low for stability)
+  reward_scale: 10.0  # Scale rewards to improve gradient magnitude (reduced from 1000 to prevent overflow)
+  advantage_clip_range: 10.0  # Clip normalized advantages to [-10, 10] to prevent extreme outliers
+  target_entropy: 1.0  # Target entropy per action dimension (for 2D actions, total should be ~2.0)
+
+  # Global state clipping (for value loss stabilization)
+  clip_global_state: false  # Set true to enable clipping of global state before critic
+  clip_global_state_min: -10.0  # Minimum value for clipping
+  clip_global_state_max: 10.0   # Maximum value for clipping
+
+  # System Neural Diversity (SND) settings
+  num_snd_samples: 10  # Number of context samples for Expected SND (higher = more stable, slower)
+  
+  # Diversity Control (DiCo paper approach)
+  use_diversity_control: false # Enable SND-based adapter scaling
+  target_snd: 1.0  # Target System Neural Diversity level
+                   # Scaling factor is computed as: scaling = target_snd / current_snd_ma
+                   # Higher target = more diversity, lower target = less diversity
+  snd_moving_average_coef: 0.9 # Coefficient for exponential moving average (0.9 = smooth, 0.1 = responsive)
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100  # Run evaluation every N episodes
+  num_eval_episodes: 10  # Number of episodes to run during evaluation
+  max_eval_steps: 100  # Maximum steps per evaluation episode
+
+# Model Architecture
+model:
+  # Policy dimensions
+  use_hypernetwork: true  # Set to false to disable hypernetwork/LoRA and use standard MAPPO
+  adaptive_hypernetwork: true  # Set to true to enable adaptive requerying when food enters lidar range
+  use_lidar_context: true  # Set to true to feed initial lidar readings to hypernetwork as additional context
+  use_capability_context: false  # Set to true to feed agent capabilities (speed, range) to hypernetwork
+  obs_dim: 20  # Observation dimension: pos(2) + vel(2) + food(4) + lidar_food(12) = 20 (auto-detected)
+  policy_hidden_dims: [256, 256, 256]  # List of hidden layer dimensions for policy network
+  action_dim: 2  # Action dimension (continuous 2D actions)
+  log_std_min: -2.0  # Minimum log std
+  log_std_max: 0.0  # Maximum log std
+  min_std: 0.3  # Minimum std for numerical stability (default value for dispersion)
+  
+  # LoRA settings
+  lora_rank: 16  # Rank of LoRA adapters (increased for more expressivity)
+  lora_mode: 'final_only'  # Apply LoRA to all layers for maximum diversity
+  lora_scaling_factor: 1.0  # Scaling factor for LoRA adapters (controls adaptation magnitude)
+  
+  # Context settings
+  # context_dim: 8  # num_agents (4) + initial_state_features (4) - includes position info
+  task_embed_dim: 0  # Dimension of task embedding
+  
+  # Hypernetwork Transformer settings
+  transformer_dim: 128  # Internal dimension of Transformer (increased for more capacity)
+  transformer_heads: 4  # Number of attention heads (increased for richer representations)
+  transformer_layers: 2  # Number of Transformer encoder layers (increased for depth)
+  transformer_mlp_dim: 512  # MLP dimension in Transformer (4x transformer_dim)
+  transformer_dropout: 0.0  # Dropout rate
+  
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128  # Hidden dimension for centralized critic
+  critic_num_layers: 2  # Number of layers in critic MLP
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 6.0e-5  # Policy learning rate
+  hn_learning_rate: 1.0e-5  # Hypernetwork learning rate (much lower to prevent explosion)
+  critic_learning_rate: 6.0e-5  # Critic learning rate
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5  # Increased from 1e-8 to prevent numerical instability
+
+# Logging and Checkpointing
+logging:
+  log_dir: "./logs"
+  checkpoint_dir: "./checkpoints"
+  save_interval: 100  # Save checkpoint every N episodes
+  wandb_project: "hyperlora-vmas"  # Set to enable wandb (or use --wandb flag)
+  wandb_entity: null  # Set to your wandb username/team
+
+# Experiment Settings
+experiment:
+  name: "generalization_experiment"
+  description: "Train on 2-4 agents (mixed), evaluate on 5-6 agents"
+  tags: ["generalization", "mixed_training", "dispersion"]

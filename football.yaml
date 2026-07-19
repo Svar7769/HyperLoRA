@@ -1,0 +1,18 @@
+ENV_NAME: "football"
+
+env:
+  use_fixed_capabilities: False
+  fixed_capabilities: {}
+
+ENV_KWARGS:
+  one_hot_encode_agent_id: True
+  n_agents: 3
+  num_red_agents: 3
+  ai_red_agents: True
+  ai_blue_agents: False
+  physically_different: False
+  enable_shooting: False
+  dense_reward: True
+  observe_teammates: True
+  observe_adversaries: True
+  continuous_actions: True

@@ -1,0 +1,159 @@
+# DICO Training Configuration
+# Based on "Diversity-Inducing Cooperative Multi-Agent Reinforcement Learning" (Bettini et al. 2024)
+
+experiment:
+  name: "dico_dispersion"
+  tags: ["dico", "dispersion", "diversity_control"]
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0
+
+# Environment Settings
+env:
+  scenario_name: "dispersion"
+  num_agents: 4  # Number of agents
+  num_adversaries: 0  # No adversaries in dispersion
+  max_agents: 4  # Total capacity
+  num_envs: 128
+  continuous_actions: true
+  
+  # Reward function settings (matching config.yaml)
+  penalise_by_time: false  # Whether to penalise agents by time
+  share_reward: false  # Whether agents share rewards
+  distance_shaping_coef: 0.0  # Coefficient for distance-based reward shaping (0 to disable)
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: false  # Set to true to vary number of agents during training
+  min_agents: 4  # Minimum number of agents per episode (used if mixed_agent_training=true)
+  
+  # Fixed capability and food position settings (for controlled experiments)
+  use_fixed_capabilities: false  # Set to false for randomized capabilities during training
+  fixed_food_positions: false  # Set to true to fix food positions in corners
+
+  # Capability ranges for sampling during training (used when use_fixed_capabilities=false)
+  speed_range: [0.5, 1.5]  # Range of speeds to sample from during training [min, max]
+  lidar_range_range: [0.3, 0.5]  # Range of lidar_ranges to sample from during training [min, max]
+
+  # Fixed capability definitions (used only if use_fixed_capabilities=true)
+  fixed_capabilities:
+    speeds: [0.5, 1.5, 0.5, 1.5]  # Fixed speed values for 4 agents
+    lidar_ranges: [0.5, 0.5, 0.5, 0.5]  # Fixed lidar range values for 4 agents
+
+# Training Settings
+training:
+  num_episodes: 500
+  rollout_steps: 200
+  learning_rate: 1.0e-4
+  log_interval: 10
+  seed: 34210
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2
+  ppo_epochs: 4
+  value_loss_coef: 0.5
+  entropy_coef: 0.01
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  critic_grad_norm: 0.1
+  reward_scale: 1.0
+  advantage_clip_range: 10.0
+  
+  # Value function clipping
+  clip_value_loss: true
+  value_clip_range: 10.0
+  
+  # Global state clipping
+  clip_global_state: true
+  clip_global_state_min: -5.0
+  clip_global_state_max: 5.0
+  
+  # ==================================================================
+  # DICO Diversity Control Settings (Key Feature)
+  # ==================================================================
+  # Based on Bettini et al. (2024) DiCo paper
+  #
+  # The diversity control mechanism dynamically adjusts the contribution
+  # of the heterogeneous policy component to maintain a target level of
+  # behavioral diversity (System Neural Diversity - SND).
+  #
+  # diversity_scaling(t) = sqrt(target_snd / current_snd_ma(t))
+  #
+  # where current_snd_ma is an exponential moving average of the
+  # measured SND over recent episodes.
+  # ==================================================================
+  
+  use_diversity_control: true  # Enable DICO diversity control
+  target_snd: 1.0  # Target System Neural Diversity (from Bettini et al.)
+                   # This is the desired level of behavioral diversity
+                   # Lower values = more homogeneous behavior
+                   # Higher values = more diverse behavior
+                   # Paper uses 0.2 as default
+  
+  snd_moving_average_coef: 0.1  # Coefficient for exponential moving average
+                                  # Higher values = slower adaptation (more stable)
+                                  # Lower values = faster adaptation (more responsive)
+                                  # Paper uses 0.01 (tau parameter)
+  
+  max_diversity_scaling: 100.0  # Maximum diversity scaling to prevent explosion
+                              # Clips lambda to [0.001, max_diversity_scaling]
+                              # Recommended: 2.0-5.0 for stability
+  
+  # Number of samples for SND computation
+  num_snd_samples: 128  # Number of observations to use for SND calculation (reduced for efficiency)
+                        # Lower values = faster computation, higher values = more accurate SND
+                        # 32 is a good balance between speed and accuracy
+  
+  # Mini-batch settings (DICO typically trains on full batches)
+  use_minibatches: true  # Set to true to enable mini-batch training
+  num_minibatches: 16  # Number of mini-batches (only used if use_minibatches=true)
+  shuffle_minibatches: true  # Whether to shuffle mini-batches
+  
+  # SND calculation settings (DICO-specific)
+  use_snd_obs_buffer: false  # Don't use separate observation buffer for SND
+  use_adapter_snd: false  # DICO doesn't use adapter-based SND
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 50
+  num_eval_episodes: 10
+  max_eval_steps: 200
+
+# Model Architecture
+model:
+  # DICO uses a combination of homogeneous and heterogeneous components
+  # Following Bettini et al. (2024) paper - NO hypernetwork, just per-agent networks
+  use_dico: true  # Enable DICO architecture
+  use_hypernetwork: false  # DICO does NOT use hypernetwork (per-agent networks instead)
+  
+  # Policy dimensions
+  obs_dim: 20  # Auto-detected from environment
+  policy_hidden_dims: [128, 128]  # Hidden layer dimensions for both homo and hetero
+  action_dim: 2  # Auto-detected from environment
+  
+  # Critic settings
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+  
+  # Additional settings
+  log_std_max: 0.0  # Maximum log std for exploration
+  min_std: 0.3  # Minimum std for numerical stability
+
+# Optimizer Settings
+optimizer:
+  learning_rate: 1.0e-4  # Policy learning rate
+  hn_learning_rate: 1.0e-4  # Hypernetwork learning rate (same as policy)
+  critic_learning_rate: 1.0e-4  # Critic learning rate
+  beta1: 0.9  # Adam beta1
+  beta2: 0.999  # Adam beta2
+  eps: 1.0e-8  # Adam epsilon
+
+# Logging Settings
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  save_interval: 100  # Save checkpoint every N episodes
+  wandb_project: "hyperlora-vmas"  # Set to null to disable wandb
+  wandb_entity: null  # Your wandb username/team (optional)

@@ -1,0 +1,203 @@
+# HyperLoRA Training Configuration for Pressure Plate Scenario
+
+# Device Settings
+device:
+  use_cuda: false
+  cuda_device: 0
+
+# Environment Settings
+env:
+  scenario_name: "pressure_plate"
+  num_agents: 3
+  max_agents: 3
+  num_envs: 128
+  continuous_actions: true
+  penalise_by_time: false
+  share_reward: true
+  distance_shaping_coef: 0.0 # Increased for stronger goal-seeking behavior after plate activation, was 2.0
+
+  # Pressure plate specific parameters
+  n_ground_robots: 3
+  x_semidim: 2.0
+  y_semidim: 2.0
+  plate_radius: 0.3
+  plate_margin: 0.8  # Distance from arena edge where plates are placed (must be < 1.0 to ensure valid agent spawning; larger = closer to center)
+  random_plate_positions: true  # Whether to randomize plate positions during training (vs fixed corners)
+  door_size: 0.9
+  goal_radius: 0.3
+  with_drone: false
+  use_global_obs: true
+  
+  # Reward parameters
+  # "sparse"      – fixed sparse plate/goal rewards + role-aware distance shaping
+  # "dense"       – staged dense shaping (agent 0 holds left plate, agent 1 goes right then goal)
+  # "specialized" – dense + drone exploration bonus
+  reward_type: "sparse"
+  plate_left_reward: 0.2   # Reduced to prevent return explosion (was 3.0)
+  plate_right_reward: 1.0  # Reduced to prevent return explosion (was 8.0)
+  goal_reward: 100.0         # Reduced to prevent return explosion (was 10.0)
+  time_penalty: 0.0
+
+  # Mixed agent training (disabled by default)
+  mixed_agent_training: false
+  min_agents: 2
+
+  # Agent spawn region during training
+  # "left"  → left of the door/wall (same as eval, forces agents to learn to cross)
+  # "right" → right of the door (goal side, useful for goal-reaching curriculum)
+  # "both"  → full map (original training default)
+  training_spawn_side: "left"
+
+  # Fixed capability settings
+  use_fixed_capabilities: true
+  fixed_food_positions: false  # Not applicable for this scenario
+  
+  # Fixed capability definitions
+  # Different speeds for heterogeneous agents
+  fixed_capabilities:
+    speed: [0.8, 1.0, 1.2]  # Slow, medium, fast agents
+
+# Training Settings
+training:
+  num_episodes: 310
+  rollout_steps: 200
+  learning_rate: 6.0e-4
+  log_interval: 10
+  seed: 42
+
+  # Mini-batch settings
+  use_minibatches: true
+  num_minibatches: 8
+  shuffle_minibatches: true
+
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2
+  ppo_epochs: 3          # Further reduced: fewer reuse epochs prevents critic overfitting
+  value_loss_coef: 0.25  # Significantly reduced to control value loss magnitude
+  entropy_coef: 0.01
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  hypernetwork_grad_norm: 0.1
+  critic_grad_norm: 0.1  # Aggressive clipping to control high critic gradients (was 1.0)
+  reward_scale: 1.0
+  advantage_clip_range: 10.0
+  target_entropy: 0.5
+
+  # Return normalisation: DISABLED - was causing critic gradients to be zero
+  # TODO: investigate and fix the gradient flow issue with normalization
+  normalize_returns: false
+
+  # PPO value clipping: prevents critic from making large jumps per update
+  clip_value_loss: true
+  value_clip_range: 10.0  # Maximum deviation from old value predictions
+
+  # Global state clipping: ENABLED to prevent NaN/Inf in critic causing zero gradients
+  clip_global_state: true
+  clip_global_state_min: -100.0
+  clip_global_state_max: 100.0
+
+  # Diversity Control 
+  use_diversity_control: false
+  use_adapter_snd: false
+  target_snd: 0.05
+  max_diversity_scaling: 1000.0
+  min_snd_floor: 1.0e-6
+  snd_moving_average_coef: 0.1
+  snd_sample_timesteps: 20
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 50
+  num_eval_episodes: 3
+  max_eval_steps: 200
+
+# Model Architecture
+model:
+  use_hypernetwork: true
+  adaptive_hypernetwork: true  # Enable efficient per-environment requerying when plates activate
+  use_lidar_context: false  # Global observability, no lidar
+  use_capability_context: false  # No capability context; agents differentiated via env_context and observations
+  use_observation_context: false
+  
+  # Observation dimension (calculated from observation structure):
+  # Own: pos(2) + vel(2) = 4
+  # Plate left: pos(2) + status(1) = 3
+  # Plate right: pos(2) + status(1) = 3
+  # Door: pos(2) + status(1) = 3
+  # Goal: pos(2) = 2
+  # Others: (N-1) agents * (pos(2) + vel(2)) = (N-1)*4
+  # For N=3: 4 + 3 + 3 + 3 + 2 + 8 = 23
+  obs_dim: 23  # Will be auto-detected from environment
+  
+  policy_hidden_dims: [128, 128]
+  action_dim: 2
+  log_std_min: -2.0
+  log_std_max: 0.0
+  min_std: 0.3
+
+  # HyperLoRA Configuration
+  lora_rank: 8
+  lora_mode: "final_only"  # Options: "final_only", "last_hidden", "all"
+  lora_scaling_factor: 1.0
+
+  # Context Configuration
+  context_dim: 0  # No capability context for pressure_plate
+  task_embed_dim: 0  # Small task embedding
+  
+  # Environment Context Configuration (for pressure_plate)
+  # These environment features will be passed to the hypernetwork
+  use_env_context: true  # Enable environment context
+  env_context_plate_positions: true  # Include left and right plate positions (4D)
+  env_context_door_state: true  # Include door open/closed flag (1D)
+  env_context_goal_position: true  # Include goal position (2D)
+  use_agent_id_context: true  # Include one-hot agent IDs for role differentiation (dynamically scales with max_agents)
+  # Total env_context_dim = 4 (plates) + 1 (door) + 2 (goal) + max_agents (agent_ids)
+  # For 3 agents: 4 + 1 + 2 + 3 = 10 dimensions
+  
+  # Hypernetwork Transformer
+  transformer_dim: 64
+  transformer_heads: 2
+  transformer_layers: 2
+  transformer_mlp_dim: 256
+  transformer_dropout: 0.0
+  use_cross_agent_attention: true  # No cross-agent attention for pressure_plate (agents have distinct roles, less need for coordination in hypernetwork)
+
+  # Critic Configuration (Centralized)
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+  use_gru_policy: false
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 6.0e-4
+  policy_lr: 6.0e-4
+  hn_learning_rate: 6.0e-4
+  critic_lr: 3.0e-4          # Reduced from 6e-4: slower critic updates improve stability
+  critic_learning_rate: 3.0e-4
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+  weight_decay: 0.0
+
+# Logging and Checkpointing
+logging:
+  use_wandb: false
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null
+  wandb_run_name: null
+
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  save_interval: 100
+  keep_last_n_checkpoints: 5
+
+  render_interval: 500
+  render_num_episodes: 1
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_pressure_plate"
+  description: "HyperLoRA training on pressure plate cooperation task with global observability"
+  tags: ["hyperlora", "pressure_plate", "coordination", "global_obs"]

@@ -1,0 +1,125 @@
+# CASH fine-tuning configuration for dispersion_vmas
+# Based on the working CASH config, with speed-only capability conditioning.
+# Note: in dispersion_vmas the speed capability key is `max_speed`.
+
+device:
+  use_cuda: false
+  cuda_device: 0
+
+env:
+  scenario_name: "dispersion_vmas"
+  num_agents: 4
+  max_agents: 4
+  num_envs: 128
+  continuous_actions: true
+  penalise_by_time: false
+  share_reward: false
+  distance_shaping_coef: 0.0
+
+  fixed_n_food: 20 
+
+  mixed_agent_training: true
+  min_agents: 2
+  per_env_agent_variation: false
+
+  use_fixed_capabilities: true
+  fixed_food_positions: false
+  max_speed_range: [0.5, 1.5]
+  fixed_capabilities:
+    # dispersion_vmas uses max_speed (not speed/lidar_range)
+    max_speed: [0.5, 1.5, 0.5, 1.5]
+
+training:
+  total_timesteps: 1.0e7
+
+  # effective_timesteps = num_episodes * rollout_steps * num_envs
+  # 391 * 200 * 128 = 10,009,600
+  num_episodes: 391
+  rollout_steps: 200
+  log_interval: 10
+  seed: 34210
+
+  learning_rate: 2.0e-3
+  anneal_lr: true
+  ppo_epochs: 4
+  use_minibatches: true
+  num_minibatches: 4
+  shuffle_minibatches: true
+  gamma: 0.99
+  gae_lambda: 0.95
+  ppo_clip_epsilon: 0.2
+  scale_clip_epsilon: false
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+  max_grad_norm: 0.5
+
+  hypernetwork_grad_norm: 0.5
+  critic_grad_norm: 0.5
+
+  clip_global_state: false
+  clip_global_state_min: -5.0
+  clip_global_state_max: 5.0
+
+  use_diversity_control: false
+  target_snd: 1.0
+  snd_moving_average_coef: 0.1
+
+evaluation:
+  eval_interval: 50
+  num_eval_episodes: 10
+  max_eval_steps: 200
+
+model:
+  use_cash: true
+  use_hypernetwork: false
+  use_dico: false
+  use_gru_policy: true
+
+  fc_dim_size: 128
+  gru_hidden_dim: 128
+  gru_num_layers: 1
+  policy_hidden_dims: [128, 128]
+  action_dim: 2
+  log_std_min: -2.0
+  log_std_max: 0.0
+  min_std: 0.3
+
+  # Speed-only capability context for dispersion_vmas.
+  # In train.py this maps to a 1D capability feature [max_speed]
+  # when use_onehot_context=false and use_positional_context=false.
+  use_capability_context: true
+  use_onehot_context: false
+  use_positional_context: false
+  use_lidar_context: false
+  task_embed_dim: 0
+  target_snd_dim: 0
+
+  cash_hyper_hidden_dim: 64
+  cash_hyper_layers: 4
+  cash_decoder_hidden_dim: 64
+  cash_use_two_layer_decoder: true
+
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+  use_shared_critic: false
+
+optimizer:
+  type: "adam"
+  learning_rate: 2.0e-3
+  hn_learning_rate: 2.0e-3
+  critic_learning_rate: 2.0e-3
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5
+
+logging:
+  log_dir: "./logs"
+  checkpoint_dir: "./checkpoints"
+  save_interval: 100
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null
+
+experiment:
+  name: "cash_dispersion_seed{seed}"
+  description: "CASH on dispersion_vmas with speed-only capability context"
+  tags: ["cash", "dispersion_vmas", "speed_capability"]

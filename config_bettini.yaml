@@ -1,0 +1,150 @@
+experiment:
+  sampling_device: cuda
+  train_device: cuda
+  buffer_device: cpu
+  share_policy_params: true
+  prefer_continuous_actions: true
+  collect_with_grad: false
+  gamma: 0.99
+  lr: 5.0e-05
+  adam_eps: 1.0e-06
+  clip_grad_norm: true
+  clip_grad_val: 5.0
+  soft_target_update: true
+  polyak_tau: 0.005
+  hard_target_update_frequency: 5
+  exploration_eps_init: 0.8
+  exploration_eps_end: 0.01
+  exploration_anneal_frames: 1000000
+  max_n_iters: null
+  max_n_frames: 150000000
+  on_policy_collected_frames_per_batch: 240000
+  on_policy_n_envs_per_worker: 480
+  on_policy_n_minibatch_iters: 45
+  on_policy_minibatch_size: 4096
+  off_policy_collected_frames_per_batch: 6000
+  off_policy_n_envs_per_worker: 60
+  off_policy_n_optimizer_steps: 1000
+  off_policy_train_batch_size: 128
+  off_policy_memory_size: 1000000
+  off_policy_init_random_frames: 0
+  evaluation: true
+  render: true
+  evaluation_interval: 1920000
+  evaluation_episodes: 200
+  evaluation_deterministic_actions: false
+  loggers:
+  - wandb
+  project_name: football_5v5
+  create_json: false
+  save_folder: null
+  restore_file: null
+  checkpoint_interval: null
+  checkpoint_at_end: false
+  keep_checkpoints_num: 1
+algorithm:
+  share_param_critic: true
+  clip_epsilon: 0.2
+  entropy_coef: 0.0005
+  critic_coef: 1.0
+  loss_critic_type: l2
+  lmbda: 0.9
+  scale_mapping: biased_softplus_1.0
+  use_tanh_normal: false
+  minibatch_advantage: true
+task:
+  max_steps: 500
+  n_blue_agents: 5
+  n_red_agents: 5
+  disable_ai_red: true
+  ball_mass: 0.25
+  observe_teammates: false
+  observe_adversaries: true
+  dict_obs: true
+  enable_shooting: false
+  ball_max_speed: 0.3
+  u_shoot_multiplier: 0.25
+  ai_red_agents: false
+  ai_strength: 0.5
+  ai_decision_strength: 1.0
+  ai_precision_strength: 1.0
+  spawn_in_formation: true
+  physically_different: false
+  formation_noise: 0.1
+  only_blue_formation: false
+model:
+  layers:
+    l1:
+      name: gnn_deep_sets
+      topology: from_pos
+      self_loops: true
+      gnn_class: torch_geometric.nn.conv.GATv2Conv
+      gnn_kwargs:
+        aggr: mean
+        add_self_loops: false
+      position_key: pos
+      velocity_key: vel
+      exclude_pos_from_node_features: false
+      edge_radius: 10
+    l2:
+      name: hetcontrolmlpempirical
+      num_cells:
+      - 256
+      - 256
+      activation_class: torch.nn.Tanh
+      desired_snd: 0.2
+      tau: 0.01
+      bootstrap_from_desired_snd: false
+      add_index: false
+      inequality: false
+      probabilistic: null
+      scale_mapping: null
+  intermediate_sizes:
+  - 32
+  desired_snd: null
+critic_model:
+  layers:
+    l1:
+      name: gnn_deep_sets
+      topology: full
+      self_loops: true
+      gnn_class: torch_geometric.nn.conv.GATv2Conv
+      gnn_kwargs:
+        aggr: mean
+        add_self_loops: false
+      position_key: pos
+      velocity_key: vel
+      exclude_pos_from_node_features: false
+      edge_radius: null
+    l2:
+      name: mlp
+      num_cells:
+      - 256
+      - 256
+      layer_class: torch.nn.Linear
+      activation_class: torch.nn.Tanh
+      activation_kwargs: null
+      norm_class: null
+      norm_kwargs: null
+  intermediate_sizes:
+  - 32
+  l1:
+    topology: from_pos
+    edge_radius: 10
+seed: 0
+n_frames_add_adversary: 1
+ai_strength_start: 0
+n_frames_hardness_annealing: 1
+ai_strength_preliminary: 0
+anneal_all_strenghts: true
+nonlinear_annealing: true
+n_frames_add_diversity: 1
+n_frames_diversity_annealing: 1
+n_frames_disable_agent_ball_rew: 1
+n_frames_disable_ball_rew: 1
+use_action_loss: true
+action_loss_lr: 3.0e-05
+n_frames_stop_adding_checkpoints: 1
+max_checkpoints: 1
+checkpoint_frequency: 1
+percentage_sampled_from: 1

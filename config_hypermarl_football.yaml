@@ -1,0 +1,73 @@
+defaults:
+  - football
+  - _self_
+
+ENV_NAME: ${env.ENV_NAME}
+
+# PPO Params
+ALG: "HyperMARL(MAPPO)"
+LR: 3e-4
+NUM_ENVS: 256
+NUM_STEPS: 300
+TOTAL_TIMESTEPS: 250e6
+UPDATE_EPOCHS: 4
+NUM_MINIBATCHES: 8
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.01
+VF_COEF: 0.5
+MAX_GRAD_NORM: 0.5
+ACTIVATION: "relu"
+ANNEAL_LR: False
+
+# Hypernet Params
+HYPERNET_EMBEDDING_DIM: 8
+USE_AGENT_ID_EMBEDDINGS: True
+USE_BIAS_IN_HYPERNET: True
+HYPERNET_HIDDEN_DIMS: [64]
+
+# Seeds
+SEED: 30
+NUM_SEEDS: 1
+
+# Network Architectures
+ACTOR_LAYERS: [64, 64]
+CRITIC_LAYERS: [64, 64]
+INIT_SCALE: 1.41421356
+
+# WandB Params
+ENTITY: null
+PROJECT: "hyperlora-football"
+WANDB_MODE: "online"
+EXP_NAME: ${hydra:runtime.config_name}
+EXP_TAGS: ["${ALG}", "FF", "Shared_Weights", "${ENV_NAME}", "Baseline", "Hypernets"]
+
+# Unique run name
+RUN_NAME: "hypermarl_${ENV_NAME}__${EXP_NAME}__${SEED}__${now:%Y-%m-%d_%H-%M-%S}"
+GROUP: "hypermarl_${ENV_NAME}_${EXP_NAME}"
+
+# Evaluation
+EVAL_INTERVAL: 100000
+EVAL_EPISODES: 32
+EVAL_DETERMINISTIC: True
+EVAL_PARALLEL: True
+USE_CUSTOM_EVAL: True
+MAX_EVAL_STEPS: 300
+
+# Environment Configuration
+# Football-specific kwargs are already in football.yaml ENV_KWARGS
+TEST_ENV_KWARGS: {}
+TRAIN_ENV_KWARGS: {auto_reset: True}
+ACTION_SPACE_TYPE: "continuous"
+
+# Reward Scaling
+REWARD_SCALE: 1.0
+REWARD_CLIP: 10.0
+
+# Logging and Checkpointing
+CAPTURE_VIDEO_INTERVAL: 5000000
+CHECKPOINT_INTERVAL: 1000000
+CHECKPOINT: True
+HANDLE_TERMINAL_OBS: True
+SAVE_EMBEDDINGS_INTERVAL: 5000

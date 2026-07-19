@@ -1,0 +1,169 @@
+# HyperLoRA Training Configuration for Reverse Transport (package pushing)
+
+# Device Settings
+device:
+  use_cuda: false
+  cuda_device: 0
+
+# Environment Settings
+env:
+  scenario_name: "reverse_transport"
+  num_agents: 8
+  max_agents: 8
+  num_envs: 128
+  continuous_actions: true
+  penalise_by_time: false
+  share_reward: false
+
+  # Reverse transport specific parameters
+  package_width: 0.6    # Width of the package box
+  package_length: 0.6   # Length of the package box
+  package_mass: 20      # Mass of the package (heavier = needs more coordinated effort)
+  scale_package_mass_with_agents: true  # Scale mass proportionally with agent count (keeps difficulty constant)
+
+  # Dynamic environment changes during training
+  # Controls whether package properties change during episodes
+  use_dynamic_env_changes: false
+  env_change_interval: 20  # Change environment properties every N steps (0 = no changes)
+  env_change_type: "decreasing"  # Options: "random", "schedule", "gradual", "decreasing"
+  
+  # Package property ranges for dynamic changes
+  package_mass_range: [1.0, 6.0]       # [min, max] mass values - with "decreasing", starts at max and goes to min
+  package_width_range: [0.6, 0.6]    # [min, max] width values
+  package_length_range: [0.6, 0.6]   # [min, max] length values
+
+  # Mixed agent training (off by default for this scenario)
+  mixed_agent_training: true
+  min_agents: 4
+
+  # No capability randomization: agents are physically identical in this scenario
+  use_fixed_capabilities: true
+  fixed_food_positions: false
+
+  # Fixed capability definitions – heterogeneous speed (max_speed) and force_multiplier (u_multiplier)
+  # Agents 0,2,4,6,8: slow (0.3) but strong (2.0); Agents 1,3,5,7,9: fast (0.7) but weak (1.5)
+  fixed_capabilities:
+    speed:            [0.3, 0.7, 0.3, 0.7, 0.3, 0.7, 0.3, 0.7]  # max_speed per agent (8 agents)
+    force_multiplier: [5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0]  # u_multiplier (push strength, 8 agents)
+
+# Training Settings
+training:
+  num_episodes: 310
+  rollout_steps: 300    # Give enough time to push the package to goal
+  learning_rate: 3.0e-4
+  log_interval: 10
+  seed: 42
+
+  # Mini-batch settings
+  use_minibatches: true
+  num_minibatches: 4
+  shuffle_minibatches: false
+
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2
+  ppo_epochs: 4
+  value_loss_coef: 0.5  # Standard PPO value (1.0 was inflating critic gradients)
+  entropy_coef: 0.03    # Moderate entropy: cooperative task benefits from consistent behaviour
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  hypernetwork_grad_norm: 0.1
+  critic_grad_norm: 1.0   # Explicit cap for critic (was defaulting to 10.0; pre-clip norm was 16+)
+  reward_scale: 1.0     # Shaping rewards in transport are already small
+  advantage_clip_range: 10.0
+  target_entropy: 0.5
+
+  # Global state clipping
+  clip_global_state: false
+  clip_global_state_min: -100.0
+  clip_global_state_max: 100.0
+
+  # Diversity Control – encourage diverse pushing strategies across heterogeneous agents
+  use_diversity_control: false
+  use_adapter_snd: true          # Activate the adapter SND buffer (required for diversity control)
+  target_snd: 0.1       # Target SND: moderate diversity (0.05 is a good starting point)
+  max_diversity_scaling: 1000.0  # Cap scaling to avoid instability
+  min_snd_floor: 1.0e-6
+  snd_moving_average_coef: 0.1   # Responsive moving average
+  snd_sample_timesteps: 20
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 50
+  num_eval_episodes: 10
+  max_eval_steps: 300
+
+# Model Architecture
+model:
+  use_hypernetwork: true
+  adaptive_hypernetwork: true
+
+  # Capability context: 2-D vector [max_speed, force_multiplier] per agent
+  # This is what the hypernetwork uses to generate agent-specific LoRA adapters
+  use_capability_context: true
+  use_lidar_context: false
+  use_observation_context: false
+
+  # Environment context: 3-D vector [package_mass, package_width, package_length]
+  # This allows adapters to change when environment properties change
+  env_context_dim: 3
+
+  # obs_dim = pos(2) + vel(2) + package_vel(2) + rel_pkg_pos(2) + pkg_to_goal(2) = 10
+  # Speed capability is NOT embedded in the obs; it is fed separately as context.
+  obs_dim: 10
+  policy_hidden_dims: [128, 128]
+
+  # LoRA adapter configuration
+  lora_rank: 8
+  lora_mode: "final_only"
+  lora_scaling_factor: 1.0
+
+  # Context settings: context_dim=2 [max_speed, force_multiplier]; no task embedding
+  task_embed_dim: 0
+
+  # Hypernetwork Transformer settings
+  transformer_dim: 64
+  transformer_heads: 2
+  transformer_layers: 2
+  transformer_mlp_dim: 256
+  transformer_dropout: 0.0
+  use_cross_agent_attention: true  # Agents attend to each other in the hypernetwork transformer
+
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 6.0e-4
+  policy_lr: 6.0e-4
+  hn_learning_rate: 6.0e-4
+  critic_lr: 6.0e-4
+  critic_learning_rate: 6.0e-4
+
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+  weight_decay: 0.0
+
+# Logging and Checkpointing
+logging:
+  use_wandb: false
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null
+  wandb_run_name: null
+
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  save_interval: 100
+  keep_last_n_checkpoints: 5
+
+  render_interval: 500
+  render_num_episodes: 1
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_reverse_transport"
+  description: "HyperLoRA training on the reverse-transport cooperative package-pushing task"
+  tags: ["hyperlora", "reverse_transport", "cooperative", "multi-agent"]

@@ -1,0 +1,155 @@
+# HyperLoRA Football Training Configuration
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings (Football-specific)
+env:
+  scenario_name: "football"  # Use football scenario
+  num_agents: 3  # Number of blue agents (learning team)
+  num_red_agents: 3  # Number of red agents (opponent team)
+  max_agents: 5  # Maximum number of agents for deployment
+  num_envs: 256  # Number of parallel environments (increased for better PPO batch size)
+  continuous_actions: true
+  penalise_by_time: false  # Not used in football
+  share_reward: false  # Not used in football
+  distance_shaping_coef: 0.0  # Not used in football
+  
+  # Football-specific settings
+  ai_red_agents: true  # Red team uses heuristic AI (simpler for initial training)
+  ai_blue_agents: false  # Blue team learns
+  physically_different: false  # Match Bettini paper
+  enable_shooting: false  # Match Bettini paper
+  dense_reward: true  # Use dense reward shaping
+  observe_teammates: true  # Enable teammate observations for better coordination
+  observe_adversaries: true  # Match Bettini: observe_adversaries: true
+  
+  # Mixed agent training (varying team size) - not recommended for football initially
+  mixed_agent_training: false  # Set to true to vary blue team size
+  min_agents: 3  # Minimum number of blue agents (if mixed training)
+  
+  # Fixed settings (not applicable for football)
+  use_fixed_capabilities: false  # Football capabilities come from agent roles
+  fixed_food_positions: false  # Not applicable for football
+
+# Training Settings
+training:
+  num_episodes: 3000  # Football requires more episodes
+  rollout_steps: 300  # Batch size = 256 envs * 128 steps = 32,768 (>20k for good PPO performance)
+  learning_rate: 3.0e-4  # Increased from 5e-5 for faster learning
+  log_interval: 10
+  seed: 0  # Match Bettini paper's seed
+
+  # Mini-batch settings (PPO best practice: process data in smaller chunks)
+  use_minibatches: true
+  num_minibatches: 8  # Split rollout into 8 mini-batches (4096 samples each)
+  shuffle_minibatches: true  # Shuffle for better gradient estimates
+
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # Match Bettini paper's clip_epsilon
+  ppo_epochs: 4  # Reduced from 10 (with minibatches, fewer epochs often work better)
+  value_loss_coef: 0.5  # Standard PPO value (was 2.0 which can inflate critic gradients)
+  entropy_coef: 0.01  # Increased from 0.0005 for more exploration in adversarial setting
+  gamma: 0.99  # Match Bettini paper
+  gae_lambda: 0.95  # Increased from 0.9 for better advantage estimation
+  max_grad_norm: 0.5  # Gradient clipping for policy
+  hypernetwork_grad_norm: 0.5  # Increased from 0.01 (was too restrictive for learning)
+  critic_grad_norm: 1.0  # Reduced from 10.0 for stability
+  reward_scale: 1.0  # Reduced from 10.0 (dense rewards are already well-scaled)
+  advantage_clip_range: 10.0  # Clip extreme advantages
+  target_entropy: 0.5
+
+  # Global state clipping
+  clip_global_state: false
+  clip_global_state_min: -10.0
+  clip_global_state_max: 10.0
+
+  # Diversity Control (agent role differentiation via adapters)
+  use_diversity_control: false  # No active adapter scaling
+  use_adapter_snd: true  # Log adapter-based SND for monitoring
+  target_snd: 0.1
+  max_diversity_scaling: 5.0
+  min_snd_floor: 1.0e-6
+  snd_moving_average_coef: 0.9
+
+  # System Neural Diversity (SND) settings
+  num_snd_samples: 10
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100
+  num_eval_episodes: 5  # Match Bettini paper's evaluation_episodes
+  max_eval_steps: 300  # Match training rollout_steps and Bettini's max_steps
+
+# Model Architecture
+model:
+  # Policy dimensions (will be auto-detected from football observations)
+  use_hypernetwork: true
+  adaptive_hypernetwork: false  # Not needed for football (capabilities are fixed)
+  use_lidar_context: false  # Football doesn't use lidar
+  use_capability_context: true  # Use agent capabilities (speed, size, shooting)
+  use_observation_context: false
+
+  # Observation and action dimensions (auto-detected)
+  obs_dim: null  # Auto-detected from football environment
+  action_dim: 2  # [vel_x, vel_y] or [vel_x, vel_y, rotation, shoot] if shooting enabled
+
+  # Policy network
+  policy_hidden_dims: [128, 128]  # Standard size (was [256, 256] which may be overkill)
+
+  # LoRA settings
+  lora_rank: 8  # Reduced from 16 (simpler adapters can work well)
+  lora_mode: 'final_only'  # Apply LoRA to final layer
+  lora_scaling_factor: 1.0
+
+  # Context settings
+  context_dim: 5  # speed + size + shooting_power + spawn_x + spawn_y
+  task_embed_dim: 0  # Removed task embedding (was 32, adds complexity)
+
+  # Hypernetwork Transformer settings
+  transformer_dim: 64  # Reduced from 128
+  transformer_heads: 2  # Reduced from 4
+  transformer_layers: 2  # Keep 2 layers
+  transformer_mlp_dim: 256  # 4x transformer_dim
+  transformer_dropout: 0.0  # No dropout for stability
+  use_cross_agent_attention: true  # Agents attend to each other
+
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128  # Reduced from 256
+  critic_num_layers: 2  # Keep 2 layers
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 3.0e-4  # Base learning rate
+  policy_lr: 3.0e-4  # Policy learning rate
+  hn_learning_rate: 3.0e-4  # Hypernetwork LR (increased from 5e-6 for actual learning)
+  critic_lr: 3.0e-4  # Critic learning rate
+  critic_learning_rate: 3.0e-4  # Alias for critic_lr
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5  # Slightly larger for numerical stability
+  weight_decay: 0.0
+
+# Logging and Checkpointing
+logging:
+  use_wandb: true  # Enable wandb for tracking win rate and metrics
+  wandb_project: "hyperlora-football"
+  wandb_entity: null  # Set to your wandb username/team if needed
+  wandb_run_name: null  # Auto-generated if null
+
+  log_dir: "./logs_football"
+  checkpoint_dir: "./checkpoints_football"
+  save_interval: 100
+  keep_last_n_checkpoints: 5
+
+  render_interval: 500
+  render_num_episodes: 1
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_football"
+  description: "HyperLoRA training on VMAS football with role-based heterogeneous agents"
+  tags: ["hyperlora", "vmas", "football", "multi-agent", "heterogeneous"]

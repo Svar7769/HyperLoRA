@@ -1,0 +1,129 @@
+# CASH fine-tuning configuration for football
+# Capability setup: fixed standard agent speed.
+
+device:
+  use_cuda: false
+  cuda_device: 0
+
+env:
+  scenario_name: "football"
+  num_agents: 3
+  num_red_agents: 3
+  max_agents: 5
+  num_envs: 256
+  continuous_actions: true
+  penalise_by_time: false
+  share_reward: false
+  distance_shaping_coef: 0.0
+
+  # Football-specific settings
+  ai_red_agents: true
+  ai_blue_agents: false
+  physically_different: false
+  enable_shooting: false
+  dense_reward: true
+  observe_teammates: true
+  observe_adversaries: true
+  max_speed: 0.15
+
+  mixed_agent_training: false
+  min_agents: 3
+  per_env_agent_variation: false
+
+  # Football wrapper uses scenario-level max_speed; keep all agents at standard speed.
+  use_fixed_capabilities: false
+  fixed_food_positions: false
+
+training:
+  total_timesteps: 1.5e8
+
+  # effective_timesteps = num_episodes * rollout_steps * num_envs
+  # 1954 * 300 * 256 = 150,067,200 (~1.5e8)
+  num_episodes: 1954
+  rollout_steps: 300
+  log_interval: 10
+  seed: 34210
+
+  learning_rate: 2.0e-3
+  anneal_lr: true
+  ppo_epochs: 4
+  use_minibatches: true
+  num_minibatches: 8
+  shuffle_minibatches: true
+  gamma: 0.99
+  gae_lambda: 0.95
+  ppo_clip_epsilon: 0.2
+  scale_clip_epsilon: false
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+  max_grad_norm: 0.5
+
+  hypernetwork_grad_norm: 0.5
+  critic_grad_norm: 0.5
+
+  clip_global_state: false
+  clip_global_state_min: -10.0
+  clip_global_state_max: 10.0
+
+  use_diversity_control: false
+  target_snd: 1.0
+  snd_moving_average_coef: 0.1
+
+evaluation:
+  eval_interval: 100
+  num_eval_episodes: 10
+  max_eval_steps: 300
+
+model:
+  use_cash: true
+  use_hypernetwork: false
+  use_dico: false
+  use_gru_policy: true
+
+  fc_dim_size: 128
+  gru_hidden_dim: 128
+  gru_num_layers: 1
+  policy_hidden_dims: [128, 128]
+  action_dim: 2
+  log_std_min: -2.0
+  log_std_max: 0.0
+  min_std: 0.3
+
+  # For football, train.py builds context as [speed, size, shoot_power, pos_x, pos_y].
+  # Here speed is fixed at the standard value (max_speed=0.15).
+  use_capability_context: true
+  use_onehot_context: false
+  use_positional_context: false
+  use_lidar_context: false
+  task_embed_dim: 0
+  target_snd_dim: 0
+
+  cash_hyper_hidden_dim: 64
+  cash_hyper_layers: 4
+  cash_decoder_hidden_dim: 64
+  cash_use_two_layer_decoder: true
+
+  critic_hidden_dim: 128
+  critic_num_layers: 2
+  use_shared_critic: false
+
+optimizer:
+  type: "adam"
+  learning_rate: 2.0e-3
+  hn_learning_rate: 2.0e-3
+  critic_learning_rate: 2.0e-3
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5
+
+logging:
+  log_dir: "./logs"
+  checkpoint_dir: "./checkpoints"
+  save_interval: 100
+  wandb_project: "hyperlora-football"
+  wandb_entity: null
+
+experiment:
+  name: "cash_football_seed{seed}"
+  description: "CASH on football with fixed standard speed (max_speed=0.15)"
+  tags: ["cash", "football", "speed_capability"]

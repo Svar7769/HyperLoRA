@@ -1,0 +1,209 @@
+# HyperLoRA Training Configuration for SMAX (StarCraft Multi-Agent Challenge)
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "smax"  # SMAX environment
+  map_name: "3m"  # SMAX map name - 3m is simplest (3 marines vs 3 marines, homogeneous)
+  num_agents: 6  # Total number of agents (allies + enemies) for 3m map
+  num_allies: 3  # Number of allied units (3 marines)
+  num_enemies: 3  # Number of enemy units (3 marines)
+  max_agents: 3  # Maximum number of agents for deployment
+  num_envs: 128  # Number of parallel environments (now properly vectorized)
+  continuous_actions: false  # SMAX uses discrete actions
+  
+  # SMAX-specific parameters
+  map_width: 32  # Map width
+  map_height: 32  # Map height
+  world_steps_per_env_step: 8  # Physics simulation steps per env step
+  time_per_step: 0.0625  # Time per simulation step (1/16)
+  observation_type: "unit_list"  # "unit_list" or "conic" observation type
+  action_type: "discrete"  # "discrete" or "continuous" action type
+  use_self_play_reward: false  # Whether to use self-play reward (zero-sum)
+  see_enemy_actions: true  # Whether agents can see enemy actions
+  won_battle_bonus: 200.0  # Bonus reward for winning the battle (MASSIVE to make winning critically important)
+  walls_cause_death: true  # Match HyperMARL: walls cause death (default SMAX behavior)
+  attack_mode: "closest"  # Match HyperMARL: attack closest enemy
+  max_steps: 128  # CRITICAL: Force fast kills or timeout (must match enemy kill speed)
+  damage_reward_multiplier: 100.0  # MAXIMUM amplification - every hit must be extremely rewarding
+  death_penalty_multiplier: 0.0  # Reduced penalty - don't make agents too cautious
+  distance_reward_scale: 0.0  # ENABLED - encourage agents to move toward enemies (potential-based reward shaping)
+  smacv2_position_generation: false  # Use SMACv2 position generation
+  smacv2_unit_type_generation: false  # Use SMACv2 unit type generation
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: false  # Set to true to vary number of agents during training
+  min_agents: 10  # Minimum number of agents per episode
+  
+  # Fixed capability settings (for heterogeneous agent experiments)
+  use_fixed_capabilities: false  # Set to true to use fixed unit types
+
+# Training Settings
+training:
+  num_episodes: 5000  # Increased for SMAX complexity
+  rollout_steps: 128  # Match max_steps for fast combat
+  learning_rate: 0.002  # Match HyperMARL: 0.002 (20x higher than before)
+  anneal_lr: true  # Match HyperMARL: enable learning rate annealing
+  log_interval: 10
+  seed: 0
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # Match HyperMARL: 0.2 (standard PPO clipping)
+  ppo_epochs: 4  # Match HyperMARL: 4 epochs (not 20)
+  value_loss_coef: 0.5  # Match HyperMARL: 0.5 (not 1.0)
+  entropy_coef: 0.01  # Small entropy bonus for exploration (HyperMARL uses 0.0, but we need initial exploration)
+  entropy_decay: 0.999  # Slow decay to maintain exploration during each curriculum stage
+  min_entropy_coef: 0.0  # Match HyperMARL: no minimum entropy
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda parameter
+  max_grad_norm: 0.25  # Match HyperMARL: 0.25 (more aggressive clipping)
+  critic_grad_norm: 0.25  # Match HyperMARL: same as policy grad norm
+  hypernetwork_grad_norm: 0.25  # Match policy grad norm for consistency
+  reward_scale: 3.0  # Further reduced since damage_multiplier is now 100x
+  advantage_clip_range: 25.0  # Increased to handle larger reward variance
+  normalize_returns: true  # Normalize returns to prevent value function explosion
+  target_entropy: 1.5  # Higher target entropy for more diverse action selection
+  
+  # Curriculum learning for SMAX - Enemy Number Progression (3-stage)
+  use_curriculum: true  # Enable curriculum learning
+  curriculum_type: "enemy_number"  # "enemy_number" (vary num enemies) or "damage_scale" (vary damage)
+  
+  # Enemy number curriculum: gradually increase enemy count (easier to harder)
+  # Stage 1: 3 allies vs 1 enemy (easy - learn basic combat)
+  curriculum_stage1_episodes: 800  # Shorter first stage - enough to learn basic attacking
+  curriculum_stage1_num_enemies: 1
+  
+  # Stage 2: 3 allies vs 2 enemies (medium - learn coordination)
+  curriculum_stage2_episodes: 1200  # Give time to learn new attack action (action 6)
+  curriculum_stage2_num_enemies: 2
+  
+  # Stage 3: 3 allies vs 3 enemies (hard - full game)
+  # After episode 2000: Full 3v3 battles
+  curriculum_stage3_num_enemies: 3
+  
+  # Damage scale curriculum (old approach, kept for compatibility)
+  curriculum_stage2_damage_scale: 0.05
+  curriculum_stage3_damage_scale: 0.10
+  curriculum_stage4_damage_scale: 0.20
+  curriculum_stage5_damage_scale: 0.35
+  curriculum_stage6_damage_scale: 0.50
+  curriculum_stage7_damage_scale: 0.75
+  
+  # Value function clipping
+  clip_value_loss: true  # Enable value loss clipping
+  value_clip_range: 10.0  # Value loss clipping range
+
+  # Global state clipping (for value loss stabilization)
+  clip_global_state: true  # Enable clipping of global state before critic
+  clip_global_state_min: -10.0  # Minimum value for clipping
+  clip_global_state_max: 10.0   # Maximum value for clipping
+
+  # System Neural Diversity (SND) settings
+  num_snd_samples: 10  # Number of context samples for Expected SND
+  
+  # Diversity Control (DiCo paper approach)
+  use_diversity_control: false  # Enable SND-based adapter scaling
+  target_snd: 1.0  # Target System Neural Diversity level
+  snd_moving_average_coef: 0.9  # Coefficient for exponential moving average
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100  # Run evaluation every N episodes
+  num_eval_episodes: 10  # Number of episodes to run during evaluation
+  max_eval_steps: 128  # Match training max_steps
+
+# Model Architecture
+model:
+  # Policy dimensions
+  use_hypernetwork: true  # Set to false to disable hypernetwork/LoRA and use standard MAPPO
+  use_gru_policy: true  # Use GRU-based policy (common in MARL baselines like EPyMARL)
+  adaptive_hypernetwork: false  # No adaptive requerying for SMAX
+  use_lidar_context: false  # SMAX doesn't use lidar
+  use_capability_context: true  # Use unit type as context
+  obs_dim: 48  # Observation dimension (will be auto-detected based on map and observation type)
+                # For 2s3z with unit_list:
+                # - Own features: 4 + 6 (unit types) = 10
+                # - Ally features: 4 * (7 + 6) = 52
+                # - Enemy features: 5 * (7 + 6) = 65
+                # Total: 10 + 52 + 65 = 127 (actual will be auto-detected)
+  
+  # GRU Policy settings (used when use_gru_policy=true)
+  fc_dim_size: 128  # Match HyperMARL: initial embedding layer dimension
+  gru_hidden_dim: 128  # Hidden dimension of GRU (HyperMARL baseline: 128)
+  gru_num_layers: 1  # Number of stacked GRU layers (1 is standard)
+  
+  # MLP Policy settings (used when use_gru_policy=false)
+  policy_hidden_dims: [256, 256]  # Hidden layer dimensions for MLP policy network
+  
+  action_dim: 10  # Action dimension (will be auto-detected: 5 movement + 5 attack for 2s3z)
+  
+  # For discrete actions in SMAX, log_std parameters are not used
+  log_std_min: -2.0  # Not used for discrete actions
+  log_std_max: 0.0   # Not used for discrete actions
+  min_std: 0.1       # Not used for discrete actions
+  
+  # LoRA settings
+  lora_rank: 8  # Rank of LoRA adapters
+  lora_mode: 'final_only'  # Apply LoRA to final layer only
+  lora_scaling_factor: 0.02  # Scaling factor for LoRA adapters (reduced from 2.0 to prevent huge adapter norms)
+  
+  # Context settings
+  # For SMAX, context is unit capabilities (7 dimensions)
+  # Features: health, attack, attack_range, velocity, sight_range, radius, attack_speed
+  task_embed_dim: 0  # Dimension of task embedding (0 is fine - context provides the signal)
+  
+  # Hypernetwork Transformer settings
+  transformer_dim: 128  # Internal dimension of Transformer
+  transformer_heads: 4  # Number of attention heads
+  transformer_layers: 2  # Number of Transformer encoder layers
+  transformer_mlp_dim: 512  # MLP dimension in Transformer
+  transformer_dropout: 0.0  # Dropout rate
+  
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128  # Hidden dimension for critic MLP
+  critic_num_layers: 2  # Number of layers in critic MLP
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 0.002  # Match HyperMARL: 0.002
+  hn_learning_rate: 0.002  # Match policy learning rate
+  critic_learning_rate: 0.002  # Match HyperMARL: same LR for all components
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-7
+
+# Logging Settings
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  log_interval: 10
+  save_interval: 100
+  use_wandb: true  # Set to true to enable Weights & Biases logging
+  wandb_project: "hyperlora-vmas"
+  wandb_entity: null
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_smax_3m_simplified"
+  description: "HyperLoRA training on SMAX 3m environment (simplified, homogeneous marines)"
+  tags: ["hyperlora", "smax", "starcraft", "multi-agent", "3m", "homogeneous", "simplified"]
+
+# Notes:
+# - SMAX is JAX-based (not PyTorch/VMAS), so integration requires changes to train.py
+# - Observations are asymmetric (allies see different features than enemies)
+# - Actions are discrete: movement (5 directions) + attack (N enemies)
+# - Different maps have different unit compositions and difficulties:
+#   * 3m: 3 marines vs 3 marines (homogeneous, symmetric)
+#   * 2s3z: 2 stalkers + 3 zealots vs same (heterogeneous)
+#   * 8m: 8 marines vs 8 marines (larger scale)
+#   * 25m: 25 marines vs 25 marines (very large scale)
+#   * 5m_vs_6m: Asymmetric battles (different team sizes)
+#   * 3s5z_vs_3s6z: Asymmetric heterogeneous battles
+# - For heterogeneous maps (2s3z, 3s5z), unit types provide natural diversity
+# - Context for HyperLoRA should be unit type (one-hot or embedded)
+# - May need to modify train.py to handle JAX environments and discrete actions

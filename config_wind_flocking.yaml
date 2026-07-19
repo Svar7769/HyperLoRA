@@ -1,0 +1,166 @@
+# HyperLoRA Training Configuration for Wind Flocking
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "wind_flocking_position"  # Wind flocking with position-based actions
+  num_agents: 2
+  max_agents: 2  # Maximum number of agents for deployment
+  num_envs: 128
+  continuous_actions: true
+
+  # Wind flocking specific settings
+  wind: 2.0  # Wind magnitude (pointing downward in -Y direction)
+  energy_reward_weight: 1.0  # TURN OFF. Let them move freely!
+  wind_reward_weight: 1.0  # Increase this so the wind actually hurts.
+  formation_shaping_weight: 0.5  # Weight for formation alignment shaping reward
+  center_reward_weight: 1.0  # TURN OFF. Stop pulling them into a ball!
+
+  # Position controller settings
+  position_gain: 2.0  # Proportional gain for position control
+  max_speed: 0.5  # Maximum velocity magnitude
+  position_range: 0.5  # Action space bounds: [-0.5, 0.5]
+
+  # Agent configuration
+  agent_radii: [0.05, 0.03]  # Radii for each agent (big, small)
+  cover_angle_tolerance: 1.0  # Tolerance for shielding effect
+
+  # Episode settings
+  horizon: 200  # Episode length
+
+# Training Settings
+training:
+  num_episodes: 200
+  rollout_steps: 200
+  learning_rate: 3.0e-4
+  log_interval: 10
+  seed: 42
+
+  # Mini-batch settings
+  use_minibatches: true
+  num_minibatches: 8
+  shuffle_minibatches: true
+
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2
+  ppo_epochs: 4
+  value_loss_coef: 1.0
+  entropy_coef: 0.1
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  hypernetwork_grad_norm: 0.2
+  reward_scale: 0.05
+  advantage_clip_range: 10.0
+  target_entropy: 1.0
+
+  # Global state clipping
+  clip_global_state: false
+  clip_global_state_min: -100.0
+  clip_global_state_max: 100.0
+
+  # Diversity Control
+  use_diversity_control: true
+  target_snd: 0.05  # Target System Neural Diversity level
+  target_snd_list: [0.05, 0.1, 0.2]  # Optional rollout-time target SND schedule
+  target_snd_change_interval: 50  # Requery hypernetwork every N rollout steps with next target
+  target_snd_mode: "cycle"  # "cycle" or "random"
+  max_diversity_scaling: 10.0
+  min_snd_floor: 1.0e-6
+  snd_moving_average_coef: 0.1
+  snd_sample_timesteps: 20
+
+  # SND calculation settings
+  use_snd_obs_buffer: false
+  snd_obs_buffer_size: 10000
+  snd_obs_filter_food: false
+  snd_obs_buffer_sample_size: 256
+
+  # Adapter-based SND
+  use_adapter_snd: true
+  adapter_snd_sample_size: 128
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 50
+  num_eval_episodes: 3
+  max_eval_steps: 200
+
+  # Evaluation with different SND targets (for formation experiments)
+  eval_snds: [0.05, 0.1, 0.2]  # Test different formation tightness
+
+# Model Architecture
+model:
+  use_hypernetwork: true
+  use_gru_policy: false
+  adaptive_hypernetwork: false  # No adaptive requerying for wind flocking
+  use_lidar_context: false  # No lidar in wind flocking
+  use_capability_context: false  # Agents differentiated by position
+
+  # Agent position encoding for hypernetwork context
+  use_agent_position_context: true  # Feed initial positions to hypernetwork
+  agent_position_dim: 2  # x, y coordinates
+
+  # Target SND as hypernetwork input
+  use_target_snd_context: true  # Feed target SND to hypernetwork
+  target_snd_dim: 1  # Scalar target SND value
+
+  # Observation dimension
+  # pos(2) + vel(2) + rel_pos_to_other_agents(2*(n_agents-1)) + wind(2)
+  # For 2 agents: 2 + 2 + 2 + 2 = 8
+  obs_dim: 8
+
+  # MLP Policy settings
+  policy_hidden_dims: [64, 64]
+  action_dim: 2  # 2D position actions
+  log_std_min: -2.0
+  log_std_max: 0.5
+  min_std: 0.3
+
+  # LoRA settings
+  lora_rank: 8
+  lora_mode: 'final_only'
+  lora_scaling_factor: 1.0
+
+  # Context settings
+  task_embed_dim: 0  # No task embedding needed
+
+  # Hypernetwork Transformer settings
+  transformer_dim: 64
+  transformer_heads: 2
+  transformer_layers: 2
+  transformer_mlp_dim: 256
+  transformer_dropout: 0.0
+  use_cross_agent_attention: true
+
+  # Centralized Critic settings
+  critic_hidden_dim: 64
+  critic_num_layers: 2
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 3.0e-4
+  hn_learning_rate: 3.0e-4
+  critic_learning_rate: 3.0e-4
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5
+
+# Logging and Checkpointing
+logging:
+  log_dir: "./logs"
+  checkpoint_dir: "./checkpoints"
+  save_interval: 100
+  wandb_project: "hyperlora-wind-flocking"
+  wandb_entity: null
+
+# Experiment Settings
+experiment:
+  name: "wind_flocking_position"
+  description: "Wind flocking with position-based actions and SND-controlled formation diversity"
+  tags: ["hyperlora", "wind-flocking", "formation", "diversity-control"]

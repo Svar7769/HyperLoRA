@@ -1,0 +1,75 @@
+defaults:
+  - dispersion_vmas
+  - _self_
+
+ENV_NAME: ${env.ENV_NAME}
+
+# PPO Params
+ALG: "HyperMARL(MAPPO)"
+LR: 0.001  # Paper setting
+NUM_ENVS: 128
+NUM_STEPS: 200  # Paper setting
+TOTAL_TIMESTEPS: 20e6
+UPDATE_EPOCHS: 4
+NUM_MINIBATCHES: 8
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.01  # Paper setting
+VF_COEF: 0.5
+MAX_GRAD_NORM: 0.5
+ACTIVATION: "relu"
+ANNEAL_LR: False
+
+# Hypernet Params
+# no embedding by default, just use one hot encoding agent ids
+HYPERNET_EMBEDDING_DIM: 8  # Paper setting
+USE_AGENT_ID_EMBEDDINGS: True
+USE_BIAS_IN_HYPERNET: True
+HYPERNET_HIDDEN_DIMS: [64]  # Paper setting - single layer
+
+# Seeds
+SEED: 30
+NUM_SEEDS: 1
+
+# Network Architectures
+ACTOR_LAYERS: [64, 64]
+CRITIC_LAYERS: [64, 64]
+INIT_SCALE: 1.41421356  # sqrt(2) for relu
+
+# WandB Params
+ENTITY: null
+PROJECT: "hyperlora-vmas"
+WANDB_MODE: "online"
+EXP_NAME: ${hydra:runtime.config_name}
+EXP_TAGS: ["${ALG}", "FF", "Shared_Weights", "${ENV_NAME}", "Baseline", "Hypernets"]
+
+# Unique run name
+RUN_NAME: "hypermarl_${ENV_NAME}__${EXP_NAME}__${SEED}__${now:%Y-%m-%d_%H-%M-%S}"
+GROUP: "hypermarl_${ENV_NAME}_${EXP_NAME}"
+
+# Evaluation
+EVAL_INTERVAL: 100000  # Evaluate every 100k steps
+EVAL_EPISODES: 32  # Number of evaluation episodes
+EVAL_DETERMINISTIC: True
+EVAL_PARALLEL: True  # Use parallel evaluation for speed
+USE_CUSTOM_EVAL: True  # Use custom evaluation with completion rate, food found, avg reward
+MAX_EVAL_STEPS: 200  # Maximum steps per evaluation episode
+
+# Environment Configuration
+# Args from env are passed to both train and eval envs
+# Override specific parameters here (merged with env.ENV_KWARGS)
+TEST_ENV_KWARGS: {penalise_by_time: False}
+TRAIN_ENV_KWARGS: {auto_reset: True, penalise_by_time: False}
+ACTION_SPACE_TYPE: "continuous"  # Paper uses discrete actions
+
+# Reward Scaling (to prevent exploding critic loss)
+REWARD_SCALE: 1.0
+REWARD_CLIP: 10.0  # Clip rewards to [-REWARD_CLIP, REWARD_CLIP]
+
+# Logging and Checkpointing
+CAPTURE_VIDEO_INTERVAL: 5000000  # TOTAL_TIMESTEPS // 4
+CHECKPOINT_INTERVAL: 1000000  # Save checkpoint every 1M steps
+CHECKPOINT: True
+HANDLE_TERMINAL_OBS: True
+SAVE_EMBEDDINGS_INTERVAL: 5000  # Save agent embeddings every N updates

@@ -1,0 +1,174 @@
+# HyperLoRA Training Configuration
+
+# Device Settings
+device:
+  use_cuda: false  # Set to true to use CUDA/GPU acceleration
+  cuda_device: 0  # CUDA device ID (if multiple GPUs available)
+
+# Environment Settings
+env:
+  scenario_name: "dispersion"  # VMAS scenario name (dispersion_vmas = global obs, agent-specific food)
+  num_agents: 4
+  max_agents: 4  # Maximum number of agents for deployment (default: same as num_agents)
+  num_envs: 128
+  continuous_actions: true
+  penalise_by_time: false  # Whether to penalise agents by time (encourages faster solutions and active exploration)
+  share_reward: false # Whether agents share rewards
+  distance_shaping_coef: 0.0  # Coefficient for distance-based reward shaping (0 to disable)
+  
+  # Mixed agent training (for self-attention generalization across team sizes)
+  mixed_agent_training: true # Set to true to vary number of agents during training
+  min_agents: 2  # Minimum number of agents per episode (used if mixed_agent_training=true)
+  # max_agents is used as the upper bound for mixed training
+  # All agents in an episode have SAME capabilities (homogeneous teams)
+  
+  # Per-environment agent variation (requires mixed_agent_training=true)
+  per_env_agent_variation: false # Set to true to vary number of agents PER ENVIRONMENT (not just per episode)
+                                  # When enabled, each parallel environment can have a different number of agents
+                                  # within the same training batch, sampled uniformly from [min_agents, max_agents]
+  
+  # Fixed capability and food position settings (for controlled experiments)
+  use_fixed_capabilities: true  # Set to true to use fixed capabilities (no randomization)
+  fixed_food_positions: false  # Set to true to fix food positions in corners
+  
+  # Fixed capability definitions (used only if use_fixed_capabilities=true)
+  # If num_agents doesn't match the length of these lists, will auto-generate fixed capabilities
+  fixed_capabilities:
+    speed: [0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5]  # Fixed speed values - must match num_agents
+    lidar_range: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]  # Fixed lidar range values - 0.5 for all agents
+
+# Training Settings
+training:
+  num_episodes: 310
+  rollout_steps: 200
+  learning_rate: 6.0e-4
+  log_interval: 10
+  seed: 34210
+  
+  # Mini-batch settings
+  use_minibatches: true  # Re-enabled after fixing Mean Ratio
+  num_minibatches: 16  # Number of mini-batches to split the rollout into (must divide rollout evenly)
+  shuffle_minibatches: true  # Do NOT shuffle for GRU (breaks temporal correspondence)
+  
+  # PPO hyperparameters
+  ppo_clip_epsilon: 0.2  # PPO clipping parameter
+  ppo_epochs: 4  # Standard PPO epochs
+  value_loss_coef: 1.0  # Coefficient for value loss
+  entropy_coef: 0.05  # Entropy coefficient for exploration (increased for GRU to promote diverse behavior)
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda parameter
+  max_grad_norm: 0.5  # Maximum gradient norm for clipping (conservative to prevent NaN)
+  hypernetwork_grad_norm: 0.1  # Gradient norm for hypernetwork (low for stability)
+  reward_scale: 0.2  # Scale rewards to improve gradient magnitude (reduced from 1000 to prevent overflow)
+  advantage_clip_range: 10.0  # Clip normalized advantages to [-10, 10] to prevent extreme outliers
+  target_entropy: 1.0  # Target entropy per action dimension (for 2D actions, total should be ~2.0)
+
+  # Global state clipping (for value loss stabilization)
+  clip_global_state: false  # Set true to enable clipping of global state before critic
+  clip_global_state_min: -5.0  # Minimum value for clipping
+  clip_global_state_max: 5.0   # Maximum value for clipping
+
+  # Diversity Control (DiCo paper approach)
+  use_diversity_control: true # Enable SND-based adapter scaling
+  target_snd: 0.007  # Target System Neural Diversity level 
+                   # Scaling factor is computed as: scaling = sqrt(target_snd / current_snd_ma)
+                   # Higher target = more diversity, lower target = less diversity
+  max_diversity_scaling: 100.0  # Maximum allowed diversity scaling factor s² (default: 5.0)
+                                  # WARNING: Very high values (>10000) can cause numerical instability
+                                  # Adapters, adapter contributions, and action means are clipped to [-100, 100]
+                                  # to prevent NaN/inf, but high scaling may still affect training dynamics
+  min_snd_floor: 1.0e-6  # Minimum SND value for computing scaling ratio (prevents division by zero)
+                         # Lower floor allows higher scaling when SND is very small
+                         # With target_snd=1.0: floor=1e-6 allows s²=1,000,000, floor=0.01 allows s²=100
+  snd_moving_average_coef: 0.1 # Coefficient for exponential moving average (0.9 = smooth, 0.1 = responsive)
+  snd_sample_timesteps: 20  # Number of timesteps to sample from trajectory for SND calculation
+                            # Uniformly samples across rollout to reduce computation (default: 20)
+                            # Set to rollout_steps to use all timesteps (slower but more accurate)
+  
+  # SND Observation Buffer Settings (for using initial state observations instead of replay buffer)
+  use_snd_obs_buffer: false  # Set to true to use a separate observation buffer for SND calculation
+  snd_obs_buffer_size: 10000  # Number of initial observations to collect for SND calculation
+  snd_obs_filter_food: true  # Set to true to only collect observations where food is detected (lidar readings > 0)
+  snd_obs_buffer_sample_size: 256  # Number of observations to sample from buffer for each SND calculation
+
+  # Adapter-based SND Settings (using hypernetwork query observations)
+  use_adapter_snd: true  # Enable adapter-based SND calculation (distance between LoRA adapters)
+  # Buffer size: 2 * num_agents * num_envs (allows initial query + one requery per agent)
+  # Example: 2 agents × 128 envs × 2 queries = 512 maximum contexts per episode
+  # Buffer is refilled each episode
+  adapter_snd_sample_size: 128  # Number of contexts to randomly sample from buffer for adapter SND calculation
+  
+# Evaluation Settings
+evaluation:
+  eval_interval: 50  # Run evaluation every N episodes
+  num_eval_episodes: 10  # Number of episodes to run during evaluation
+  max_eval_steps: 200  # Maximum steps per evaluation episode
+
+# Model Architecture
+model:
+  # Policy dimensions
+  use_hypernetwork: true  # Set to false to disable hypernetwork/LoRA and use standard MAPPO
+  use_gru_policy: false # Set to true to use GRU-based policy (for partial observability / recurrent policies)
+  adaptive_hypernetwork: true  # Set to true to enable adaptive requerying when food enters lidar range
+  use_lidar_context: true  # Set to true to feed initial lidar readings to hypernetwork as additional context
+  use_capability_context: false  # Set to true to feed agent capabilities (speed, range) to hypernetwork
+  use_onehot_context: false  # Set to true to feed one-hot agent IDs to hypernetwork (for dispersion_vmas role differentiation)
+  obs_dim: 20  # Observation dimension: pos(2) + vel(2) + food(4) + lidar_food(12) = 20 (auto-detected)
+  
+  # GRU Policy settings (used when use_gru_policy=true)
+  fc_dim_size: 128  # Initial embedding layer dimension
+  gru_hidden_dim: 128  # Hidden dimension of GRU
+  gru_num_layers: 1  # Number of stacked GRU layers (1 is standard)
+  
+  # MLP Policy settings (used when use_gru_policy=false)
+  policy_hidden_dims: [128, 128]  # List of hidden layer dimensions for policy network
+  action_dim: 2  # Action dimension (continuous 2D actions)
+  log_std_min: -2.0  # Minimum log std
+  log_std_max: 0.0  # Maximum log std
+  min_std: 0.3  # Minimum std for numerical stability (default value for dispersion)
+  
+  # LoRA settings
+  lora_rank: 8  # Rank of LoRA adapters (increased for more expressivity)
+  lora_mode: 'final_only'  # Apply LoRA to all layers for maximum diversity
+  lora_scaling_factor: 1.0  # Scaling factor for LoRA adapters (balanced: not too dominant, not too weak)
+  
+  # Context settings
+  # context_dim: 8  # num_agents (4) + initial_state_features (4) - includes position info
+  task_embed_dim: 0  # Dimension of task embedding
+  target_snd_dim: 0  # Dimension for target SND input to hypernetwork (0 = disabled, 1 for scalar target_snd value)
+  
+  # Hypernetwork Transformer settings
+  transformer_dim: 64  # Internal dimension of Transformer (increased for more capacity)
+  transformer_heads: 2  # Number of attention heads (increased for richer representations)
+  transformer_layers: 2  # Number of Transformer encoder layers (increased for depth)
+  transformer_mlp_dim: 256  # MLP dimension in Transformer (4x transformer_dim)
+  transformer_dropout: 0.0  # Dropout rate
+  use_cross_agent_attention: true  # Enable cross-agent attention (false = agents only attend to own features, better for zero-shot generalization)
+  
+  # Centralized Critic settings (MAPPO)
+  critic_hidden_dim: 128  # Hidden dimension for centralized critic
+  critic_num_layers: 2  # Number of layers in critic MLP
+
+# Optimizer Settings
+optimizer:
+  type: "adam"
+  learning_rate: 6.0e-4  # Policy learning rate
+  hn_learning_rate: 6.0e-4  # Hypernetwork learning rate (matched to policy LR for stronger learning)
+  critic_learning_rate: 6.0e-4  # Critic learning rate
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5  # Increased from 1e-8 to prevent numerical instability
+
+# Logging and Checkpointing
+logging:
+  log_dir: "./logs"
+  checkpoint_dir: "./checkpoints"
+  save_interval: 100  # Save checkpoint every N episodes
+  wandb_project: "hyperlora-vmas"  # Set to enable wandb (or use --wandb flag)
+  wandb_entity: null  # Set to your wandb username/team
+
+# Experiment Settings
+experiment:
+  name: "hyperlora_vmas"
+  description: "HyperLoRA training on VMAS environment"
+  tags: ["hyperlora", "vmas", "multi-agent"]

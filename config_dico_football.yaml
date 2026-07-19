@@ -1,0 +1,159 @@
+# DICO Training Configuration for Football
+# Adapted from config_bettini.yaml settings for 3v3 football
+
+experiment:
+  name: "dico_football"
+  tags: ["dico", "football", "diversity_control", "cooperative"]
+
+# Device Settings
+device:
+  use_cuda: true
+  cuda_device: 0  # When using CUDA_VISIBLE_DEVICES, this is always 0
+
+# Environment Settings
+env:
+  scenario_name: "football"
+  num_agents: 3
+  num_red_agents: 3
+  max_agents: 3
+  num_envs: 192  # Balance: good GPU saturation without OOM
+  continuous_actions: true
+
+  # Reward settings
+  penalise_by_time: false
+  share_reward: false
+  distance_shaping_coef: 0.0
+
+  # Football-specific settings (matching config_bettini.yaml task section)
+  ai_red_agents: true  # Use heuristic AI for red team (wrapper only sends blue actions)
+  ai_blue_agents: false
+  physically_different: false  # Bettini: physically_different=false
+  enable_shooting: false  # Bettini: enable_shooting=false
+  dense_reward: true
+  observe_teammates: true  # Paper Section C.1.1: agents access teammate observations via communication
+  observe_adversaries: true  # Bettini: observe_adversaries=true
+
+  # Mixed agent training
+  mixed_agent_training: false
+  min_agents: 3
+
+  # Fixed capability settings
+  use_fixed_capabilities: false
+  fixed_food_positions: false
+
+# Training Settings
+training:
+  num_episodes: 3000  # Football needs many episodes
+  rollout_steps: 300  # Bettini: max_steps=500
+  learning_rate: 5.0e-5  # Bettini: lr=5e-5
+  log_interval: 10
+  seed: 0  # Bettini: seed=0
+
+  # Curriculum Learning for Football Adversaries
+  # Stage 1 (episodes 0-499): No adversaries (disable_ai_red=True)
+  # Stage 2 (episodes 500-999): Half-strength adversaries (ai_strength=0.5)
+  # Stage 3 (episodes 1000+): Full-strength adversaries (ai_strength=1.0)
+  curriculum_stage1_episodes: 1000  # Episodes with no adversaries
+  curriculum_stage2_episodes: 1000  # Episodes with half-strength adversaries
+
+  # PPO hyperparameters (from config_bettini.yaml algorithm section)
+  ppo_clip_epsilon: 0.2  # Bettini: clip_epsilon=0.2
+  ppo_epochs: 3  # 10 epochs × 16 minibatches = 160 total updates (prevents ratio divergence)
+  value_loss_coef: 1.0  # Bettini: critic_coef=1.0
+  entropy_coef: 0.0  # Increased from 0.0 to prevent policy collapse and maintain exploration
+  gamma: 0.9  # Bettini: gamma=0.9 (het_control_experiment.yaml:16)
+  gae_lambda: 0.9  # Bettini: lmbda=0.9
+  max_grad_norm: 5.0  # Bettini: clip_grad_val=5.0 (het_control_experiment.yaml:21)
+  critic_grad_norm: 5.0  # Match policy grad norm (Bettini uses single clip_grad_val)
+  reward_scale: 1.0
+  normalize_returns: true  # Normalize returns to prevent critic gradient explosion
+  advantage_clip_range: 10.0
+
+  # Value clipping
+  clip_value_loss: true
+  value_clip_range: 10.0
+
+  # Global state clipping
+  clip_global_state: true
+  clip_global_state_min: -5.0
+  clip_global_state_max: 5.0
+
+  # ==================================================================
+  # DICO Diversity Control Settings
+  # ==================================================================
+  # Bettini config_bettini.yaml model.layers.l2:
+  #   desired_snd: 0.2, tau: 0.01
+  # ==================================================================
+  # UPDATED: More stable diversity control parameters to prevent
+  # gradient vanishing and KL divergence explosion
+  # ==================================================================
+
+  use_diversity_control: true
+  target_snd: 0.2  # Increased from 0.2 to reduce scaling ratios and stabilize training
+  snd_moving_average_coef: 0.1  # Increased from 0.01 to track SND changes faster (was too slow)
+  max_diversity_scaling: 25.0  # Reduced from 1000.0 (sqrt gives max ~5.0 instead of ~31.6)
+  min_snd_floor: 0.1  # Increased from default 1e-6 to prevent near-zero division
+  num_snd_samples: 32
+
+  # Mini-batch settings
+  # 192 envs × 300 steps × 3 agents = 172,800 samples
+  # With 24 minibatches: 7,200 samples/batch (lower memory usage)
+  use_minibatches: true
+  num_minibatches: 15  # More batches = less memory per batch
+  shuffle_minibatches: true
+
+  # DICO-specific SND settings
+  use_snd_obs_buffer: false
+  use_adapter_snd: false
+
+# Evaluation Settings
+evaluation:
+  eval_interval: 100
+  num_eval_episodes: 3  # Bettini uses 200 but that is expensive; keep reasonable
+  max_eval_steps: 500  # Match training rollout_steps
+
+# Model Architecture
+model:
+  # DICO architecture (homo + per-agent hetero, NO hypernetwork)
+  use_dico: true
+  use_hypernetwork: false
+
+  # Deep Sets settings (for football, matching Bettini et al. 2024)
+  use_deep_sets: true  # Enable GATv2 preprocessing
+  gat_out_features: 32  # Bettini: intermediate_sizes=[32]
+  edge_radius: 10.0  # Bettini: edge_radius=10 (for actor)
+
+  # Context settings (football capabilities: speed, size, shoot_power)
+  use_capability_context: false  # DICO doesn't use capability context
+  use_lidar_context: false
+  use_observation_context: false
+
+  # Policy dimensions (auto-detected from environment)
+  obs_dim: null  # Auto-detected
+  policy_hidden_dims: [256, 256]  # Bettini: num_cells=[256,256]
+  action_dim: 2  # [vel_x, vel_y]
+
+  # Critic settings
+  use_shared_critic: true  
+  critic_hidden_dim: 256  # Match policy width
+  critic_num_layers: 2
+
+  # Scale mapping: biased_softplus_1.0 (matching Bettini's scale_mapping)
+  # std = softplus(raw + 1.0) — no log_std clipping or min_std needed
+
+# Optimizer Settings
+optimizer:
+  learning_rate: 5.0e-5  # Bettini: lr=5e-5
+  hn_learning_rate: 3.0e-5
+  critic_learning_rate: 5.0e-5
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-5  # Bettini: adam_eps=1e-5 (het_control_experiment.yaml:24)
+
+# Logging Settings
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  save_interval: 100
+  wandb_project: "hyperlora-football"
+  wandb_entity: null
